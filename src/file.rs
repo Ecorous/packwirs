@@ -2,6 +2,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub(crate) struct Pack {
     pub name: String,
     pub author: Option<String>,
@@ -13,6 +14,7 @@ pub(crate) struct Pack {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub(crate) struct PackFileIndex {
     pub file: String,
     pub hash_format: String,
@@ -20,6 +22,7 @@ pub(crate) struct PackFileIndex {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub(crate) struct PackFileVersion {
     pub quilt: Option<String>,
     pub fabric: Option<String>,
