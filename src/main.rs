@@ -1,9 +1,9 @@
+#![allow(clippy::large_enum_variant)]
+use crate::file::{Pack, PackFileIndex, PackFileVersion};
 use clap::{Parser, Subcommand};
 use std::fs::{read_to_string, File};
-use std::os::unix::prelude::FileExt;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-
-use crate::file::{Pack, PackFileIndex, PackFileVersion};
 mod file;
 mod utils;
 
@@ -28,6 +28,8 @@ impl std::fmt::Display for Modloader {
 }
 
 #[derive(Parser, Debug)]
+#[clap(about, version)]
+#[clap(propagate_version = true)]
 struct Packwirs {
     #[command(subcommand)]
     subcommand: Command,
@@ -47,7 +49,7 @@ enum Command {
         #[arg(long)]
         author: Option<String>,
         #[arg(long)]
-        version: Option<String>,
+        pack_version: Option<String>,
         #[arg(long)]
         description: Option<String>,
         #[arg(long)]
@@ -63,7 +65,7 @@ enum Command {
         #[arg(long)]
         liteloader_version: Option<String>,
     },
-    #[command(alias = "cf")]
+    #[command(aliases = vec!["cf", "curse"])]
     Curseforge {
         #[command(subcommand)]
         subcommand: CFCommand,
@@ -73,22 +75,31 @@ enum Command {
 
 #[derive(Subcommand, Debug)]
 enum CFCommand {
-    #[command(alias = "install")]
+    #[command(aliases = vec!["install", "get"])]
     Add {
         #[arg()]
         project: String,
-    }, /*Detect {
+    },
+    Detect {},
+    Export {},
+    Import {},
+    #[command(alias = "doc")]
+    Open {},
+}
 
-       }
-       Export {
-
-       }
-       Import {
-
-       }
-       Open {
-
-       }*/
+#[derive(Subcommand, Debug)]
+enum MRCommand {
+    #[command(aliases = vec!["install", "get"])]
+    Add {
+        #[arg()]
+        project: String,
+    },
+    Export {
+        #[arg(long, short = 'o')]
+        output: String,
+        #[arg(long)]
+        unrestrict_domains: bool,
+    },
 }
 
 fn pack_toml_exists(dir: &Path) -> bool {
@@ -114,10 +125,29 @@ fn print_debug_info(pack: Pack) {
 fn main() {
     let pack_format = "packwiz:1.1.0";
     let cli = Packwirs::parse();
+    let client = reqwest::blocking::ClientBuilder::new()
+        .user_agent(concat!(
+            env!("CARGO_PKG_NAME"),
+            "/",
+            env!("CARGO_PKG_VERSION"),
+        ))
+        .build().unwrap();
     match cli.subcommand {
         Command::Curseforge { subcommand } => match subcommand {
             CFCommand::Add { project } => {
                 println!("Reach cf add, do stuff late™. project: {project}")
+            }
+            CFCommand::Detect {} => {
+                todo!()
+            }
+            CFCommand::Export {} => {
+                todo!()
+            }
+            CFCommand::Import {} => {
+                todo!()
+            }
+            CFCommand::Open {} => {
+                todo!()
             }
         },
         Command::Read => {
@@ -140,7 +170,7 @@ fn main() {
         Command::Init {
             name,
             author,
-            version,
+            pack_version: version,
             description,
             mc_version,
             modloader,
@@ -194,7 +224,7 @@ fn main() {
             if let Some(ref mc_version_some) = mc_version {
                 final_mc_version = mc_version_some.to_string()
             } else {
-                final_mc_version = inquire::Text::new("Minecraft Version").prompt().unwrap();
+                final_mc_version = inquire::Select::new("Minecraft Version", utils::get_minecraft_versions(client.clone())).prompt().unwrap();
             }
             if let Some(ref modloader_some) = modloader {
                 final_modloader = utils::to_modloader(modloader_some.to_string())
@@ -222,9 +252,12 @@ fn main() {
                         final_quilt_version = quilt_version;
                     } else {
                         final_quilt_version = Some(
-                            inquire::Select::new("Quilt Version", utils::get_quilt_versions())
-                                .prompt()
-                                .unwrap(),
+                            inquire::Select::new(
+                                "Quilt Version",
+                                utils::get_quilt_versions(client.clone()),
+                            )
+                            .prompt()
+                            .unwrap(),
                         );
                     }
                 }
@@ -233,9 +266,12 @@ fn main() {
                         final_fabric_version = fabric_version;
                     } else {
                         final_fabric_version = Some(
-                            inquire::Select::new("Fabric Version", utils::get_fabric_versions())
-                                .prompt()
-                                .unwrap(),
+                            inquire::Select::new(
+                                "Fabric Version",
+                                utils::get_fabric_versions(client.clone()),
+                            )
+                            .prompt()
+                            .unwrap(),
                         );
                     }
                 }
@@ -243,10 +279,14 @@ fn main() {
                     if forge_version.is_some() {
                         final_forge_version = forge_version;
                     } else {
+                        println!("Starting forge read - this may take a while");
                         final_forge_version = Some(
-                            inquire::Select::new("Forge Version", utils::get_forge_versions())
-                                .prompt()
-                                .unwrap(),
+                            inquire::Select::new(
+                                "Forge Version",
+                                utils::get_forge_versions(client.clone()),
+                            )
+                            .prompt()
+                            .unwrap(),
                         );
                     }
                 }
@@ -257,7 +297,7 @@ fn main() {
                         final_liteloader_version = Some(
                             inquire::Select::new(
                                 "Liteloader Version",
-                                utils::get_liteloader_versions(),
+                                utils::get_liteloader_versions(client.clone()),
                             )
                             .prompt()
                             .unwrap(),
@@ -286,8 +326,8 @@ fn main() {
                 },
             };
             let toml = toml::to_string(&pack).unwrap();
-            let file = File::create(pack_toml).unwrap();
-            let _ = file.write_at(toml.as_bytes(), 0);
+            let mut file = File::create(pack_toml).unwrap();
+            let _ = file.write_all(toml.as_bytes());
         }
     }
     println!("Hello, world!");
